@@ -39,10 +39,10 @@ class Database
     public static function table($table) /// static method can not use return$this;
     {
 
-        $sql = "select * from $table";  //double quote 
+        $sql = "SELECT * FROM $table";  //double quote 
         self::$sql = $sql;
         $db = new Database();
-        $db->query();
+        // $db->query();
         return $db;
     }
     public function orderBy($col, $value)
@@ -54,15 +54,58 @@ class Database
     public function where($col, $operator, $value = '')
     {
         if (func_num_args() == 2) {
-            self::$sql .= " where $col=$operator";
+            $val = is_numeric($operator) ? $operator : "'$operator'";
+            self::$sql .= " WHERE $col = $val";
         } else {
-            self::$sql .= " where $col $operator $value";
+            $val = is_numeric($value) ? $value : "'$value'";
+            self::$sql .= " WHERE $col $operator $val";
         }
-        $this->query();
         return $this;
     }
 
 
+    public function andWhere($col, $operator, $value = '')
+    {
+        if (func_num_args() == 2) {
+            self::$sql .= " and $col=$operator";
+        } else {
+            self::$sql .= " and $col $operator $value";
+        }
+        // $this->query();
+        return $this;
+    }
+    public function orWhere($col, $operator, $value = '')
+    {
+        if (func_num_args() == 2) {
+            $val = is_numeric($operator) ? $operator : "'$operator'";
+            self::$sql .= " OR $col = $val";
+        } else {
+            $val = is_numeric($value) ? $value : "'$value'";
+            self::$sql .= " OR $col $operator $val";
+        }
+        return $this;
+    }
+
+    public static function create($table, $data)
+    {
+        $db = new Database();
+        $str_col = implode(",", array_keys($data));
+        $v = "";
+        $x = 1;
+        foreach ($data as $d) {
+            $v .= "?";
+            if ($x < count($data)) {
+                $v .= ",";
+                $x++;
+            }
+        }
+        $sql = "insert into $table ($str_col) values ($v)";
+        self::$sql = $sql;
+        $value = array_values($data);
+        $db->query($value);
+        $id = self::$dbh->lastInsertId();
+        return Database::table($table)->where('id', $id)->getOne();
+    }
 
     // DB::update('tablename', ['id' => 1], id = 1);
     public static function update($table, $data, $id)
@@ -96,6 +139,31 @@ class Database
         $db->query();
         return true;
     }
+    public function paginate($record_per_page)
+    {
+        if (isset($_GET['page'])) {
+            $page_no = $_GET['page'];
+        }
+        if (!isset($_GET['page'])) {
+            $page_no = 1;
+        }
+        if (isset($_GET['page']) and $_GET['page'] < 1) {
+            $page_no = 1;
+        }
+        $this->query();
+        $count = self::$res->rowCount();
+        echo $count;
+        // 0,5 page 1
+        //5,5 page 2
+        //10,5 page 3
+        $index = ($page_no - 1) * $record_per_page;
+        // SELECT * FROM users LIMIT 0,5
+        self::$sql .= " LIMIT $index,$record_per_page";
+        $this->query();
+        self::$data = self::$res->fetchAll(PDO::FETCH_OBJ);
+        echo "<pre>";
+        var_dump(self::$data);
+    }
 }
 // $db = new Database();
 // $user = $db->query('select * from users')->get();
@@ -114,6 +182,13 @@ class Database
 // echo "<pre>";
 // print_r($user);
 
-if (Database::delete('users', 5)) {
-    echo "Deleted";
-}
+// if (Database::delete('users', 5)) {
+//     echo "Deleted";
+// }
+
+// $user = Database::table('users')->where('name', 'like', '%s%')->orWhere("location", 'yangon')->get();
+// echo "<pre>";
+// print_r($user);
+
+// Database::table('users')->orderBy('id', 'desc')->paginate(5);
+Database::table('users')->where('name', 'like', '%u%')->paginate(10);
